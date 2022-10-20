@@ -1,7 +1,7 @@
 <?php
 
 use yii\helpers\Url;
-use yii\helpers\Html;
+use yii\bootstrap5\Html;
 use yii\bootstrap\Modal;
 use yii\helpers\Inflector;
 use yii\helpers\StringHelper;

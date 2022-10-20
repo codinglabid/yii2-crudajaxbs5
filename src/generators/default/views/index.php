@@ -4,7 +4,7 @@ use yii\helpers\Inflector;
 use yii\helpers\StringHelper;
 use yii\bootstrap5\Modal;
 use yii\helpers\Url;
-use yii\helpers\Html;
+use yii\bootstrap5\Html;
 
 
 /* @var $this yii\web\View */
@@ -15,7 +15,7 @@ $nameAttribute = $generator->getNameAttribute();
 echo "<?php\n";
 ?>
 use yii\helpers\Url;
-use yii\helpers\Html;
+use yii\bootstrap5\Html;
 use yii\bootstrap5\Modal;
 use kartik\grid\GridView;
 use cangak\ajaxcrud\CrudAsset; 
@@ -43,7 +43,7 @@ CrudAsset::register($this);
                 ['content'=>
                     Html::a('<i class="fas fa fa-plus" aria-hidden="true"></i>', ['create'],
                     ['role'=>'modal-remote','title'=> 'Tambah <?= Inflector::pluralize(Inflector::camel2words(StringHelper::basename($generator->modelClass))) ?>','class'=>'btn btn-default']).
-                    Html::a('<i class="fas fa fa-refresh" aria-hidden="true"></i>', [''],
+                    Html::a('<i class="fas fa fa-sync" aria-hidden="true"></i>', [''],
                     ['data-pjax'=>1, 'class'=>'btn btn-default', 'title'=>'Reset Grid']).
                     '{toggleData}'.
                     '{export}'
@@ -74,7 +74,11 @@ CrudAsset::register($this);
     </div>
 </div>
 <?='<?php Modal::begin([
+   "options" => [
     "id"=>"ajaxCrudModal",
+    "tabindex" => false // important for Select2 to work properly
+],
+   "id"=>"ajaxCrudModal",
     "footer"=>"",// always need it for jquery plugin
 ])?>'."\n"?>
 <?='<?php Modal::end(); ?>'?>
