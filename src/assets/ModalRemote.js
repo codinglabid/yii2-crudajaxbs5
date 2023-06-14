@@ -6,442 +6,621 @@
  * @author John Martin john.itvn@gmail.com
  */
 (function ($) {
-    $.fn.hasAttr = function (name) {
-        return this.attr(name) !== undefined;
-    };
-}(jQuery));
-
+  $.fn.hasAttr = function (name) {
+    return this.attr(name) !== undefined;
+  };
+})(jQuery);
 
 function ModalRemote(modalId) {
+  this.defaults = {
+    okLabel: "OK",
+    executeLabel: "Execute",
+    cancelLabel: "Cancel",
+    loadingTitle: "Loading",
+  };
 
-    this.defaults = {
-        okLabel: "OK",
-        executeLabel: "Execute",
-        cancelLabel: "Cancel",
-        loadingTitle: "Loading"
-    };
+  this.modal = $(modalId);
 
-    this.modal = $(modalId);
+  this.dialog = $(modalId).find(".modal-dialog");
 
-    this.dialog = $(modalId).find('.modal-dialog');
+  this.header = $(modalId).find(".modal-header");
 
-    this.header = $(modalId).find('.modal-header');
+  this.content = $(modalId).find(".modal-body");
 
-    this.content = $(modalId).find('.modal-body');
+  this.footer = $(modalId).find(".modal-footer");
+  this.loadingContent =
+    '<div class="progress">' +
+    '<div class="progress-bar progress-bar-striped progress-bar-animated  bg-success" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>' +
+    "</div>";
 
-    this.footer = $(modalId).find('.modal-footer');
+  let xhr;
 
-    this.loadingContent =
-        '<div class="progress">' +
-        '<div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>' +
-        '</div>';
+  $(this.modal).on("hidden.bs.modal", function (e) {
+    abortXHR(xhr);
+  });
 
-    let xhr;
+  /**
+   * Show the modal
+   */
+  this.show = function () {
+    this.clear();
+    $(this.modal).modal("show");
+  };
 
-    $(this.modal).on('hidden.bs.modal', function (e) {
-        abortXHR(xhr);
+  /**
+   * Hide the modal
+   */
+  this.hide = function () {
+    $(this.modal).modal("hide");
+  };
+
+  /**
+   * Toogle show/hide modal
+   */
+  this.toggle = function () {
+    $(this.modal).modal("toggle");
+  };
+
+  /**
+   * Clear modal
+   */
+  this.clear = function () {
+    $(this.modal).find(".modal-title").remove();
+    $(this.content).html("");
+    $(this.footer).html("");
+  };
+
+  /**
+   * Set size of modal
+   * @param {string} size large/normal/small
+   */
+  this.setSize = function (size) {
+    $(this.dialog).removeClass("modal-lg");
+    $(this.dialog).removeClass("modal-sm");
+    if (size == "large") $(this.dialog).addClass("modal-lg");
+    else if (size == "small") $(this.dialog).addClass("modal-sm");
+    else if (size !== "normal") console.warn("Undefined size " + size);
+  };
+
+  /**
+   * Set modal header
+   * @param {string} content The content of modal header
+   */
+  this.setHeader = function (content) {
+    $(this.header).html(content);
+  };
+
+  /**
+   * Set modal content
+   * @param {string} content The content of modal content
+   */
+  this.setContent = function (content) {
+    $(this.content).html(content);
+  };
+
+  this.setFocusOnInput = function () {
+    const $content = $(this.content);
+
+    let targetEl;
+    const $autofocusElements = $content.find(
+      "input[autofocus], textarea[autofocus]"
+    );
+    if ($autofocusElements.length > 0) {
+      targetEl = $autofocusElements.last()[0];
+    } else {
+      const $inputElements = $content.find("input, textarea");
+      if ($inputElements.length > 0) {
+        targetEl = $autofocusElements.first()[0];
+      }
+    }
+
+    if (targetEl && document.activeElement !== targetEl) {
+      try {
+        document.activeElement.blur();
+      } catch (e) {
+        console.log(e);
+      }
+
+      // Chrome does not allow to focus input until it is rendered. MutationObserver does not help
+      const intervalMs = 50;
+      const maxAttempts = 40;
+      let attempt = -1;
+      function setFocus() {
+        attempt++;
+        if (document.activeElement === targetEl || attempt >= maxAttempts) {
+          return;
+        }
+
+        targetEl.focus();
+        setTimeout(setFocus, intervalMs);
+      }
+      setFocus();
+    }
+  };
+
+  /**
+   * Set modal footer
+   * @param {string} content The content of modal footer
+   */
+  this.setFooter = function (content) {
+    $(this.footer).html(content);
+  };
+
+  /**
+   * Set modal footer
+   * @param {string} title The title of modal
+   */
+  this.setTitle = function (title) {
+    // remove old title
+    $(this.header).find("h5.modal-title").remove();
+    // add new title
+    $(this.header).prepend('<h5 class="modal-title">' + title + "</h5>");
+  };
+
+  /**
+   * Hide close button
+   */
+  this.hidenCloseButton = function () {
+    $(this.header).find("button.close").hide();
+  };
+
+  /**
+   * Show close button
+   */
+  this.showCloseButton = function () {
+    $(this.header).find("button.close").show();
+  };
+
+  /**
+   * Show loading state in modal
+   */
+  this.displayLoading = function () {
+    this.setContent(this.loadingContent);
+    this.setTitle(this.defaults.loadingTitle);
+  };
+
+  /**
+   * Add button to footer
+   * @param string label The label of button
+   * @param string classes The class of button
+   * @param callable callback the callback when button click
+   */
+  this.addFooterButton = function (label, type, classes, callback) {
+    buttonElm = document.createElement("button");
+    buttonElm.setAttribute("type", type === null ? "button" : type);
+    buttonElm.setAttribute(
+      "class",
+      classes === null ? "btn btn-primary" : classes
+    );
+    buttonElm.innerHTML = label;
+    var instance = this;
+    $(this.footer).append(buttonElm);
+    if (callback !== null) {
+      $(buttonElm).click(function (event) {
+        callback.call(instance, this, event);
+      });
+    }
+  };
+
+  /**
+   * Send ajax request and wraper response to modal
+   * @param {string} url The url of request
+   * @param {string} method The method of request
+   * @param {object}data of request
+   */
+  this.doRemote = function (url, method, data) {
+    var instance = this;
+    abortXHR(xhr);
+    xhr = $.ajax({
+      url: url,
+      method: method,
+      data: data,
+      beforeSend: function () {
+        beforeRemoteRequest.call(instance);
+      },
+      error: function (response) {
+        errorRemoteResponse.call(instance, response);
+      },
+      success: function (response) {
+        successRemoteResponse.call(instance, response);
+      },
+      contentType: false,
+      cache: false,
+      processData: false,
     });
+  };
 
-    /**
-     * Show the modal
-     */
-    this.show = function () {
-        this.clear();
-        $(this.modal).modal('show');
+  /**
+   * Before send request process
+   * - Ensure clear and show modal
+   * - Show loading state in modal
+   */
+  function beforeRemoteRequest() {
+    this.show();
+    this.displayLoading();
+  }
+
+  /**
+   * When remote sends error response
+   * @param {string} response
+   */
+  function errorRemoteResponse(response) {
+    this.setTitle(response.status + response.statusText);
+    this.setContent(response.responseText);
+    this.addFooterButton(
+      "Close",
+      "button",
+      "btn btn-default",
+      function (button, event) {
+        this.hide();
+      }
+    );
+  }
+
+  /**
+   * When remote sends success response
+   * @param {string} response
+   */
+  this.iconClass = function (icon) {
+    const span = document.createElement("span");
+    span.setAttribute("id", "icon"); // 👈️ set id for icon
+    let result = {
+      status: false,
+      html: "",
     };
 
-    /**
-     * Hide the modal
-     */
-    this.hide = function () {
-        $(this.modal).modal('hide');
+    // if (iconPath !== undefined) {
+    //   span.setAttribute("style", `content: url(${iconPath});`); // 👈️ if asset icon isSet
+    // } else
+    if (icon !== undefined) {
+      // icon not found
+      let arr = ["success", "error", "delete", "failed"];
+      if (!arr.includes(icon)) {
+        result.status = false;
+        result.html =
+          "<b>Warning</b>: value icon must in succes, error, or failed";
+      }
+      // end icon not found
+
+      if (icon === "success") {
+        span.setAttribute("class", "icon-success"); // 👈️ success
+      } else if (icon === "delete") {
+        span.setAttribute("class", "icon-delete"); // 👈️ delete
+      } else {
+        span.setAttribute("class", "icon-failed"); // 👈️ failed
+      }
+    }
+    result.status = true;
+    result.html = span.outerHTML.toString();
+
+    return result;
+  };
+
+  this.customContent = function (contentAnimation) {
+    let { icon, text } = contentAnimation;
+    let options = contentAnimation?.options;
+    let iconPath = options?.iconPath;
+    let template = options?.template;
+
+    let result = {
+      status: false,
+      content: "",
     };
+    // if standart icon is set
+    const divText = document.createElement("div");
 
-    /**
-     * Toogle show/hide modal
-     */
-    this.toggle = function () {
-        $(this.modal).modal('toggle');
-    };
-
-    /**
-     * Clear modal
-     */
-    this.clear = function () {
-        $(this.modal).find('.modal-title').remove();
-        $(this.content).html("");
-        $(this.footer).html("");
-    };
-
-    /**
-     * Set size of modal
-     * @param {string} size large/normal/small
-     */
-    this.setSize = function (size) {
-        $(this.dialog).removeClass('modal-lg');
-        $(this.dialog).removeClass('modal-sm');
-        if (size == 'large')
-            $(this.dialog).addClass('modal-lg');
-        else if (size == 'small')
-            $(this.dialog).addClass('modal-sm');
-        else if (size !== 'normal')
-            console.warn("Undefined size " + size);
-    };
-
-    /**
-     * Set modal header
-     * @param {string} content The content of modal header
-     */
-    this.setHeader = function (content) {
-        $(this.header).html(content);
-    };
-
-    /**
-     * Set modal content
-     * @param {string} content The content of modal content
-     */
-    this.setContent = function (content) {
-        $(this.content).html(content);
-    };
-
-    this.setFocusOnInput = function () {
-        const $content = $(this.content);
-
-        let targetEl;
-        const $autofocusElements = $content.find('input[autofocus], textarea[autofocus]');
-        if ($autofocusElements.length > 0) {
-            targetEl = $autofocusElements.last()[0];
-        } else {
-            const $inputElements = $content.find('input, textarea');
-            if ($inputElements.length > 0) {
-                targetEl = $autofocusElements.first()[0];
-            }
-        }
-
-        if (targetEl && document.activeElement !== targetEl) {
-            try {
-                document.activeElement.blur();
-            } catch (e) { console.log(e); }
-
-            // Chrome does not allow to focus input until it is rendered. MutationObserver does not help
-            const intervalMs = 50;
-            const maxAttempts = 40;
-            let attempt = -1;
-            function setFocus() {
-                attempt++;
-                if (document.activeElement === targetEl ||
-                    attempt >= maxAttempts
-                ) {
-                    return;
-                }
-
-                targetEl.focus();
-                setTimeout(setFocus, intervalMs);
-            }
-            setFocus();
-        }
+    if (text !== undefined) {
+      divText.setAttribute("class", "div-text-content");
+      divText.appendChild(document.createTextNode(text));
     }
 
-    /**
-     * Set modal footer
-     * @param {string} content The content of modal footer
-     */
-    this.setFooter = function (content) {
-        $(this.footer).html(content);
-    };
+    if (icon !== undefined) {
+      var responseIcon = this.iconClass(icon);
+      result.status = true;
+      result.content = responseIcon.html + divText.outerHTML.toString();
+    }
+    // end standart icon
 
-    /**
-     * Set modal footer
-     * @param {string} title The title of modal
-     */
-    this.setTitle = function (title) {
-        // remove old title
-        $(this.header).find('h5.modal-title').remove();
-        // add new title
-        $(this.header).prepend('<h5 class="modal-title">' + title + '</h5>');
-    };
+    // options is set
+    if (options !== undefined) {
+      const spanIcon = document.createElement("span");
+      if (iconPath !== undefined) {
+        spanIcon.setAttribute("id", "icon");
+        spanIcon.setAttribute("style", `content: url(${iconPath});`);
+        result.status = true;
+        result.content =
+          spanIcon.outerHTML.toString() + divText.outerHTML.toString();
+      }
+      if (template !== undefined) {
+        template = template.replace(/\s/g, "");
+        template = template.replace(/{icon}/, spanIcon.outerHTML.toString());
+        result.status = true;
+        result.content = template;
+      }
+    }
+    return result;
+  };
+  this.urlRedirect = function (newUrl, spanTime, timeleft) {
+    var downloadTimer = setInterval(function () {
+      if (timeleft <= 0) {
+        clearInterval(downloadTimer);
+        spanTime.innerHTML = "Redirect . . . ";
+        window.location.replace(newUrl);
+        return true;
+      } else {
+        let time = `You will be redirected in <b> ${timeleft} </b> seconds. `;
+        spanTime.innerHTML =
+          "<div class='flex flex-column content-loading'>'<div id ='icon' class='loading'></div>" +
+          time +
+          "</div>";
+      }
+      timeleft -= 1;
+    }, 1000);
+  };
+  function successRemoteResponse(response) {
+    let pjaxErrors = "";
+    $(".modal-dialog").addClass("modal-dialog-centered");
 
-    /**
-     * Hide close button
-     */
-    this.hidenCloseButton = function () {
-        $(this.header).find('button.close').hide();
-    };
-
-    /**
-     * Show close button
-     */
-    this.showCloseButton = function () {
-        $(this.header).find('button.close').show();
-    };
-
-    /**
-     * Show loading state in modal
-     */
-    this.displayLoading = function () {
-        this.setContent(this.loadingContent);
-        this.setTitle(this.defaults.loadingTitle);
-    };
-
-    /**
-     * Add button to footer
-     * @param string label The label of button
-     * @param string classes The class of button
-     * @param callable callback the callback when button click
-     */
-    this.addFooterButton = function (label, type, classes, callback) {
-        buttonElm = document.createElement('button');
-        buttonElm.setAttribute('type', type === null ? 'button' : type);
-        buttonElm.setAttribute('class', classes === null ? 'btn btn-primary' : classes);
-        buttonElm.innerHTML = label;
-        var instance = this;
-        $(this.footer).append(buttonElm);
-        if (callback !== null) {
-            $(buttonElm).click(function (event) {
-                callback.call(instance, this, event);
+    // Reload datatable if response contain forceReload field
+    if (response.forceReload !== undefined && response.forceReload) {
+      if (response.forceReload == "true") {
+        // Backwards compatible reload of fixed crud-datatable-pjax
+        $.pjax.reload({ container: "#crud-datatable-pjax" });
+      } else if (response.forceReload.indexOf(",") > -1) {
+        // reload multiple pjax with comma separator
+        var pjaxContainers = response.forceReload.split(",");
+        $.each(pjaxContainers, function (index, value) {
+          try {
+            $.pjax.reload({
+              container: value,
             });
-        }
-    };
-
-    /**
-     * Send ajax request and wraper response to modal
-     * @param {string} url The url of request
-     * @param {string} method The method of request
-     * @param {object}data of request
-     */
-    this.doRemote = function (url, method, data) {
-        var instance = this;
-        abortXHR(xhr);
-        xhr = $.ajax({
-            url: url,
-            method: method,
-            data: data,
-            beforeSend: function () {
-                beforeRemoteRequest.call(instance);
-            },
-            error: function (response) {
-                errorRemoteResponse.call(instance, response);
-            },
-            success: function (response) {
-                successRemoteResponse.call(instance, response);
-            },
-            contentType: false,
-            cache: false,
-            processData: false
+            $.pjax.xhr = null;
+          } catch (error) {
+            pjaxErrors += "<b>Warning</b>: " + error + "<br/>";
+          }
         });
-    };
+      } else {
+        try {
+          $.pjax.reload({
+            container: response.forceReload,
+          });
+        } catch (error) {
+          pjaxErrors += "<b>Warning</b>: " + error + "<br/>";
+        }
+      }
+    }
+    // start set contentAnimation
+    if (response.contentAnimation !== undefined) {
+      let resultContent = this.customContent(response.contentAnimation);
+      this.setContent(resultContent.content);
+    }
+    // end set contentAnimation
 
-    /**
-     * Before send request process
-     * - Ensure clear and show modal
-     * - Show loading state in modal
-     */
-    function beforeRemoteRequest() {
-        this.show();
-        this.displayLoading();
+    // start set redirect
+    if (response.redirect !== undefined) {
+      let url = response.redirect.url;
+      let splitPath = url.split("/").toString().split(",");
+      let host = window.location.host;
+      let href = window.location.href;
+      let newUrl = "";
+
+      $(this.header).hide();
+      $(this.footer).hide();
+      var timeleft = response.redirect?.timeLeft;
+      const spanTime = document.createElement("span");
+      spanTime.innerHTML =
+        "<div class='flex flex-column'>'<div id ='icon' class='loading'></div> Please Wait . . .";
+      ("</div>");
+
+      var countSlash = (url.match(/\//g) || []).length;
+      if (countSlash > 1) {
+        url = splitPath.toString().replace(/,/g, "/");
+        newUrl = host + url.toString();
+      } else {
+        newUrl = href + "/" + url;
+      }
+      spanTime.setAttribute("class", "timer");
+      this.setContent(spanTime);
+      this.urlRedirect(url, spanTime, timeleft);
+    }
+    // end set redirect
+
+    // Close modal if response contains forceClose field
+    if (response.forceClose !== undefined && response.forceClose) {
+      this.hide();
+      return;
+    }
+    if (
+      response.content === undefined &&
+      response.contentAnimation === undefined
+    ) {
+      pjaxErrors += "<b>Warning</b>: Please fill the content!";
+    }
+    if (response.size !== undefined) {
+      this.setSize(response.size);
     }
 
+    if (response.title !== undefined) this.setTitle(response.title);
 
-    /**
-     * When remote sends error response
-     * @param {string} response
-     */
-    function errorRemoteResponse(response) {
-        this.setTitle(response.status + response.statusText);
-        this.setContent(response.responseText);
-        this.addFooterButton('Close', 'button', 'btn btn-default', function (button, event) {
-            this.hide();
-        })
+    if (response.content !== undefined) {
+      this.setContent(response.content);
+      this.setFocusOnInput();
     }
 
-    /**
-     * When remote sends success response
-     * @param {string} response
-     */
-    function successRemoteResponse(response) {
-
-        // Reload datatable if response contain forceReload field
-        if (response.forceReload !== undefined && response.forceReload) {
-            if (response.forceReload == 'true') {
-                // Backwards compatible reload of fixed crud-datatable-pjax
-                $.pjax.reload({ container: '#crud-datatable-pjax' });
-            } else {
-                $.pjax.reload({ container: response.forceReload });
-            }
-        }
-
-        // Close modal if response contains forceClose field
-        if (response.forceClose !== undefined && response.forceClose) {
-            this.hide();
-            return;
-        }
-
-        if (response.size !== undefined)
-            this.setSize(response.size);
-
-        if (response.title !== undefined)
-            this.setTitle(response.title);
-
-        if (response.content !== undefined) {
-            this.setContent(response.content);
-            this.setFocusOnInput();
-        }
-
-        if (response.footer !== undefined)
-            this.setFooter(response.footer);
-
-        if ($(this.content).find("form")[0] !== undefined) {
-            this.setupFormSubmit(
-                $(this.content).find("form")[0],
-                $(this.footer).find('[type="submit"]')[0]
-            );
-        }
+    // start message errors
+    if (pjaxErrors) {
+      this.setContent(pjaxErrors);
+      this.setFocusOnInput();
     }
+    //end message errors
 
-    /**
-     * Prepare submit button when modal has form
-     * @param {string} modalForm
-     * @param {object} modalFormSubmitBtn
-     */
-    this.setupFormSubmit = function (modalForm, modalFormSubmitBtn) {
+    if (response.footer !== undefined) this.setFooter(response.footer);
 
-        if (modalFormSubmitBtn === undefined) {
-            // If submit button not found throw warning message
-            console.warn('Modal has form but does not have a submit button');
+    if ($(this.content).find("form")[0] !== undefined) {
+      this.setupFormSubmit(
+        $(this.content).find("form")[0],
+        $(this.footer).find('[type="submit"]')[0]
+      );
+    }
+  }
+
+  /**
+   * Prepare submit button when modal has form
+   * @param {string} modalForm
+   * @param {object} modalFormSubmitBtn
+   */
+  this.setupFormSubmit = function (modalForm, modalFormSubmitBtn) {
+    if (modalFormSubmitBtn === undefined) {
+      // If submit button not found throw warning message
+      console.warn("Modal has form but does not have a submit button");
+    } else {
+      var instance = this;
+
+      // Submit form when user clicks submit button
+      $(modalFormSubmitBtn).click(function (e) {
+        var data;
+
+        // Test if browser supports FormData which handles uploads
+        if (window.FormData) {
+          data = new FormData($(modalForm)[0]);
         } else {
-            var instance = this;
-
-            // Submit form when user clicks submit button
-            $(modalFormSubmitBtn).click(function (e) {
-                var data;
-
-                // Test if browser supports FormData which handles uploads
-                if (window.FormData) {
-                    data = new FormData($(modalForm)[0]);
-                } else {
-                    // Fallback to serialize
-                    data = $(modalForm).serializeArray();
-                }
-
-                instance.doRemote(
-                    $(modalForm).attr('action'),
-                    $(modalForm).hasAttr('method') ? $(modalForm).attr('method') : 'GET',
-                    data
-                );
-            });
-        }
-    };
-
-    /**
-     * Show the confirm dialog
-     * @param {string} title The title of modal
-     * @param {string} message The message for ask user
-     * @param {string} okLabel The label of ok button
-     * @param {string} cancelLabel The class of cancel button
-     * @param {string} size The size of the modal
-     * @param {string} dataUrl Where to post
-     * @param {string} dataRequestMethod POST or GET
-     * @param {number[]} selectedIds
-     */
-    this.confirmModal = function (title, message, okLabel, cancelLabel, size, dataUrl, dataRequestMethod, selectedIds) {
-        this.show();
-        this.setSize(size);
-
-        if (title !== undefined) {
-            this.setTitle(title);
-        }
-        // Add form for user input if required
-        this.setContent('<form id="ModalRemoteConfirmForm">' + message);
-
-        var instance = this;
-        if (okLabel !== false) {
-            this.addFooterButton(
-                okLabel === undefined ? this.defaults.okLabel : okLabel,
-                'submit',
-                'btn btn-primary',
-                function (e) {
-                    var data;
-
-                    // Test if browser supports FormData which handles uploads
-                    if (window.FormData) {
-                        data = new FormData($('#ModalRemoteConfirmForm')[0]);
-                        if (typeof selectedIds !== 'undefined' && selectedIds)
-                            data.append('pks', selectedIds.join());
-                    } else {
-                        // Fallback to serialize
-                        data = $('#ModalRemoteConfirmForm');
-                        if (typeof selectedIds !== 'undefined' && selectedIds)
-                            data.pks = selectedIds;
-                        data = data.serializeArray();
-                    }
-
-                    instance.doRemote(
-                        dataUrl,
-                        dataRequestMethod,
-                        data
-                    );
-                }
-            );
+          // Fallback to serialize
+          data = $(modalForm).serializeArray();
         }
 
-        this.addFooterButton(
-            cancelLabel === undefined ? this.defaults.cancelLabel : cancelLabel,
-            'button',
-            'btn btn-default pull-left',
-            function (e) {
-                this.hide();
-            }
+        instance.doRemote(
+          $(modalForm).attr("action"),
+          $(modalForm).hasAttr("method") ? $(modalForm).attr("method") : "GET",
+          data
         );
+      });
+    }
+  };
 
+  /**
+   * Show the confirm dialog
+   * @param {string} title The title of modal
+   * @param {string} message The message for ask user
+   * @param {string} okLabel The label of ok button
+   * @param {string} cancelLabel The class of cancel button
+   * @param {string} size The size of the modal
+   * @param {string} dataUrl Where to post
+   * @param {string} dataRequestMethod POST or GET
+   * @param {number[]} selectedIds
+   */
+  this.confirmModal = function (
+    title,
+    message,
+    okLabel,
+    cancelLabel,
+    size,
+    dataUrl,
+    dataRequestMethod,
+    selectedIds
+  ) {
+    this.show();
+    this.setSize(size);
+    if (title !== undefined) {
+      this.setTitle(title);
+    }
+    // Add form for user input if required
+    this.setContent('<form id="ModalRemoteConfirmForm">' + message);
+
+    var instance = this;
+    if (okLabel !== false) {
+      this.addFooterButton(
+        okLabel === undefined ? this.defaults.okLabel : okLabel,
+        "submit",
+        "btn btn-primary",
+        function (e) {
+          var data;
+
+          // Test if browser supports FormData which handles uploads
+          if (window.FormData) {
+            data = new FormData($("#ModalRemoteConfirmForm")[0]);
+            if (typeof selectedIds !== "undefined" && selectedIds)
+              data.append("pks", selectedIds.join());
+          } else {
+            // Fallback to serialize
+            data = $("#ModalRemoteConfirmForm");
+            if (typeof selectedIds !== "undefined" && selectedIds)
+              data.pks = selectedIds;
+            data = data.serializeArray();
+          }
+
+          instance.doRemote(dataUrl, dataRequestMethod, data);
+        }
+      );
     }
 
+    this.addFooterButton(
+      cancelLabel === undefined ? this.defaults.cancelLabel : cancelLabel,
+      "button",
+      "btn btn-default pull-left",
+      function (e) {
+        this.hide();
+      }
+    );
+  };
+
+  /**
+   * Open the modal
+   * HTML data attributes for use in local confirm
+   *   - href/data-url         (If href not set will get data-url)
+   *   - data-request-method   (string GET/POST)
+   *   - data-confirm-ok       (string OK button text)
+   *   - data-confirm-cancel   (string cancel button text)
+   *   - data-confirm-title    (string title of modal box)
+   *   - data-confirm-message  (string message in modal box)
+   *   - data-modal-size       (string small/normal/large)
+   * Attributes for remote response (json)
+   *   - forceReload           (string reloads a pjax ID)
+   *   - forceClose            (boolean remote close modal)
+   *   - size                  (string small/normal/large)
+   *   - title                 (string/html title of modal box)
+   *   - content               (string/html content in modal box)
+   *   - footer                (string/html footer of modal box)
+   * @params {elm}
+   */
+  this.open = function (elm, bulkData) {
     /**
-     * Open the modal
-     * HTML data attributes for use in local confirm
-     *   - href/data-url         (If href not set will get data-url)
-     *   - data-request-method   (string GET/POST)
-     *   - data-confirm-ok       (string OK button text)
-     *   - data-confirm-cancel   (string cancel button text)
-     *   - data-confirm-title    (string title of modal box)
-     *   - data-confirm-message  (string message in modal box)
-     *   - data-modal-size       (string small/normal/large)
-     * Attributes for remote response (json)
-     *   - forceReload           (string reloads a pjax ID)
-     *   - forceClose            (boolean remote close modal)
-     *   - size                  (string small/normal/large)
-     *   - title                 (string/html title of modal box)
-     *   - content               (string/html content in modal box)
-     *   - footer                (string/html footer of modal box)
-     * @params {elm}
+     * Show either a local confirm modal or get modal content through ajax
      */
-    this.open = function (elm, bulkData) {
-        /**
-         * Show either a local confirm modal or get modal content through ajax
-         */
-        if ($(elm).hasAttr('data-confirm-title') || $(elm).hasAttr('data-confirm-message')) {
-            this.confirmModal(
-                $(elm).attr('data-confirm-title'),
-                $(elm).attr('data-confirm-message'),
-                $(elm).attr('data-confirm-alert') ? false : $(elm).attr('data-confirm-ok'),
-                $(elm).attr('data-confirm-cancel'),
-                $(elm).hasAttr('data-modal-size') ? $(elm).attr('data-modal-size') : 'normal',
-                $(elm).hasAttr('href') ? $(elm).attr('href') : $(elm).attr('data-url'),
-                $(elm).hasAttr('data-request-method') ? $(elm).attr('data-request-method') : 'GET',
-                bulkData
-            )
-        } else {
-            this.doRemote(
-                $(elm).hasAttr('href') ? $(elm).attr('href') : $(elm).attr('data-url'),
-                $(elm).hasAttr('data-request-method') ? $(elm).attr('data-request-method') : 'GET',
-                bulkData
-            );
-        }
-    };
-
-    function abortXHR(xhr) {
-        if (xhr && xhr.readyState < 4) {
-            xhr.onreadystatechange = $.noop;
-            xhr.abort();
-        }
+    if (
+      $(elm).hasAttr("data-confirm-title") ||
+      $(elm).hasAttr("data-confirm-message")
+    ) {
+      this.confirmModal(
+        $(elm).attr("data-confirm-title"),
+        $(elm).attr("data-confirm-message"),
+        $(elm).attr("data-confirm-alert")
+          ? false
+          : $(elm).attr("data-confirm-ok"),
+        $(elm).attr("data-confirm-cancel"),
+        $(elm).hasAttr("data-modal-size")
+          ? $(elm).attr("data-modal-size")
+          : "normal",
+        $(elm).hasAttr("href") ? $(elm).attr("href") : $(elm).attr("data-url"),
+        $(elm).hasAttr("data-request-method")
+          ? $(elm).attr("data-request-method")
+          : "GET",
+        bulkData
+      );
+    } else {
+      this.doRemote(
+        $(elm).hasAttr("href") ? $(elm).attr("href") : $(elm).attr("data-url"),
+        $(elm).hasAttr("data-request-method")
+          ? $(elm).attr("data-request-method")
+          : "GET",
+        bulkData
+      );
     }
+  };
+
+  function abortXHR(xhr) {
+    if (xhr && xhr.readyState < 4) {
+      xhr.onreadystatechange = $.noop;
+      xhr.abort();
+    }
+  }
 } // End of Object
